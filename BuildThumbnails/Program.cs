@@ -31,19 +31,23 @@ services.AddTransient<BucketHandler>();
 //Build ServiceProvider
 ServiceProvider serviceProvider = services.BuildServiceProvider();
 
+//Check if the buckets exists
 BucketHandler? bucketHandler = serviceProvider.GetService<BucketHandler>();
-
-if (bucketHandler != null)
-{
-    bool bucketExists = await bucketHandler.CheckIfPhotosBucketExists();
-    if (!bucketExists)
-    {
-        Log.Logger.Error("Bucket not found");
-        Environment.Exit(1);
-    }
-}
-else
+if (bucketHandler == null)
 {
     Log.Logger.Error("BucketHandler not found");
+    Environment.Exit(1);
+}
+
+bool bucketExists = await bucketHandler.CheckIfPhotosBucketExists();
+if (!bucketExists)
+{
+    Log.Logger.Error("Bucket not found");
+    Environment.Exit(1);
+}
+bool thumbnailBucketExists = await bucketHandler.CreateThumbnailBucket();
+if (!thumbnailBucketExists)
+{
+    Log.Logger.Error("Thumbnail Bucket could not be created");
     Environment.Exit(1);
 }
