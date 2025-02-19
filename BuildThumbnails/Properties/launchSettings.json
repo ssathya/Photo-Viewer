@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "BuildThumbnails": {
+      "commandName": "Project",
+      "commandLineArgs": "-d 1/1/2024"
+    }
+  }
+}
