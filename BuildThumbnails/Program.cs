@@ -8,6 +8,7 @@ using CommandLine;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Models;
 using Serilog;
 
 DateTime startDate = DateTime.Parse("2025-01-01");
@@ -43,6 +44,7 @@ IAmazonS3 s3Client = CreateS3Client(configuration);
 //Dependency Injection
 services.AddTransient<BucketHandler>();
 services.AddSingleton(s3Client);
+services.AddTransient<DatabaseHandler>();
 
 //Build ServiceProvider
 ServiceProvider serviceProvider = services.BuildServiceProvider();
@@ -50,6 +52,7 @@ ServiceProvider serviceProvider = services.BuildServiceProvider();
 //Check if the buckets exists
 BucketHandler? bucketHandler = serviceProvider.GetService<BucketHandler>();
 ILogger<Program>? logger = serviceProvider.GetService<ILogger<Program>>();
+DatabaseHandler? databaseHandler = serviceProvider.GetService<DatabaseHandler>();
 if (bucketHandler == null)
 {
     Log.Logger.Error("BucketHandler not found");
@@ -58,6 +61,11 @@ if (bucketHandler == null)
 if (logger == null)
 {
     Log.Logger.Error("Logger not found");
+    Environment.Exit(1);
+}
+if (databaseHandler == null)
+{
+    Log.Logger.Error("DatabaseHandler not found");
     Environment.Exit(1);
 }
 bool bucketExists = await bucketHandler.CheckIfPhotosBucketExists();
@@ -82,10 +90,34 @@ if (s3Objects != null && s3Objects.Count != 0)
         logger.LogError("Source or destination bucket not found");
         Environment.Exit(1);
     }
-    foreach (var s3Object in s3Objects)
+    try
     {
-        await bucketHandler.CreatePhotoThumbNail(sourceBucket, s3Object.FileName, destinationBucket);
-        logger.LogInformation($"Processing file {s3Object.FileName}\t {s3Object.PreassignedUrl}");
+        foreach (var s3Object in s3Objects)
+        {
+            CreateStatus cs = await bucketHandler.CreatePhotoThumbNail(sourceBucket, s3Object.FileName, destinationBucket);
+            if (cs.IsCreationSuccess)
+            {
+                Image imageDetails = new()
+                {
+                    ImageFullPath = s3Object.FileName,
+                    ThumbnailFullPath = s3Object.FileName,
+                    CreationDate = string.IsNullOrEmpty(cs.CreationDate) ? DateTime.MinValue : DateTime.Parse(cs.CreationDate),
+                    GPSAltitude = cs.Altitude,
+                    GPSLatitude = string.IsNullOrEmpty(cs.GpsLatitude) ? 0 : double.Parse(cs.GpsLatitude),
+                    GPSLongitude = string.IsNullOrEmpty(cs.GpsLongitude) ? 0 : double.Parse(cs.GpsLongitude),
+                    UploadDate = s3Object.LastModifiedDate
+                };
+                await databaseHandler.StoreImageDetailsAsync(imageDetails);
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        Log.Logger.Error(ex, "Error creating thumbnails");
+    }
+    finally
+    {
+        databaseHandler.Dispose();
     }
 }
 Log.CloseAndFlush();
