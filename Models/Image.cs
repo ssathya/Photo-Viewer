@@ -15,6 +15,6 @@ public class Image
     public string? GPSLongitudeRef { get; set; }
     public double? GPSLongitude { get; set; }
     public string? GPSAltitudeRef { get; set; }
-    public double? GPSAltitude { get; set; }
+    public string? GPSAltitude { get; set; }
     public string? GPSDateTime { get; set; }
 }
